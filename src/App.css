@@ -134,12 +134,6 @@ body {
   gap: 0.75rem;
 }
 
-.card h2::before {
-  content: '▸';
-  color: var(--accent-blue);
-  font-size: 1.2em;
-}
-
 /* Error and Loading States */
 .error {
   position: fixed;
