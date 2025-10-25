@@ -147,9 +147,7 @@ const TransactionForm = ({ onTransactionCreated }) => {
 
       <button 
         type="submit" 
-        className="btn" 
         disabled={loading}
-        style={{opacity: loading ? 0.7 : 1}}
       >
         {loading ? 'Processing...' : 'Submit Transaction'}
       </button>
