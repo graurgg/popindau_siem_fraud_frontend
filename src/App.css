@@ -4,278 +4,509 @@
   box-sizing: border-box;
 }
 
+:root {
+  --dark-blue: #1a1f36;
+  --darker-blue: #161b2d;
+  --blue-gray: #2d3748;
+  --light-blue: #4a5568;
+  --accent-blue: #4299e1;
+  --accent-purple: #667eea;
+  --fraud-red: #fc8181;
+  --legitimate-green: #68d391;
+  --text-light: #e2e8f0;
+  --text-lighter: #f7fafc;
+  --card-bg: rgba(45, 55, 72, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.1);
+}
+
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #f5f5f5;
-}
-
-.App {
+  background: linear-gradient(135deg, var(--darker-blue) 0%, var(--dark-blue) 50%, #2d3748 100%);
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
+  color: var(--text-light);
+  line-height: 1.6;
 }
 
-.App-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+.app {
+  min-height: 100vh;
+  padding: 0;
+}
+
+/* Header Styles */
+.header {
+  background: linear-gradient(135deg, var(--accent-purple) 0%, var(--accent-blue) 100%);
   color: white;
-  padding: 2rem;
+  padding: 2.5rem 2rem;
   text-align: center;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  position: relative;
+  overflow: hidden;
 }
 
-.App-header h1 {
-  font-size: 2.5rem;
-  margin-bottom: 0.5rem;
+.header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="1"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+  opacity: 0.3;
 }
 
-.App-header p {
-  font-size: 1.2rem;
-  opacity: 0.9;
+.header h1 {
+  font-size: 2.8rem;
+  margin-bottom: 0.75rem;
+  font-weight: 700;
+  position: relative;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
-.App-main {
-  flex: 1;
+.header p {
+  font-size: 1.3rem;
+  opacity: 0.95;
+  font-weight: 300;
+  position: relative;
+}
+
+/* Dashboard Layout */
+.dashboard {
   padding: 2rem;
   max-width: 1400px;
   margin: 0 auto;
-  width: 100%;
-}
-
-.error-message {
-  background-color: #fee;
-  color: #c33;
-  padding: 1rem;
-  border-radius: 4px;
-  margin-bottom: 1rem;
-  border: 1px solid #fcc;
-}
-
-.loading-message {
-  background-color: #e3f2fd;
-  color: #1976d2;
-  padding: 1rem;
-  border-radius: 4px;
-  margin-bottom: 1rem;
-  text-align: center;
-}
-
-.content-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 2rem;
-  margin-bottom: 2rem;
+  align-items: start;
 }
 
-@media (max-width: 768px) {
-  .content-grid {
+@media (max-width: 1024px) {
+  .dashboard {
     grid-template-columns: 1fr;
+    padding: 1.5rem;
   }
+}
+
+/* Card Styles */
+.card {
+  background: var(--card-bg);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent-purple), var(--accent-blue));
+}
+
+.card:hover {
+  transform: translateY(-5px);
+  box-shadow: 
+    0 12px 40px rgba(0, 0, 0, 0.4),
+    0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.card.full-width {
+  grid-column: 1 / -1;
+}
+
+.card h2 {
+  color: var(--text-lighter);
+  margin-bottom: 1.5rem;
+  font-size: 1.5rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.card h2::before {
+  content: '▸';
+  color: var(--accent-blue);
+  font-size: 1.2em;
+}
+
+/* Error and Loading States */
+.error {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(252, 129, 129, 0.95);
+  border: 1px solid var(--fraud-red);
+  color: white;
+  padding: 1rem 1.5rem;
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  box-shadow: 0 8px 32px rgba(252, 129, 129, 0.3);
+  max-width: 90%;
+  width: auto;
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.error button {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.error button:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.loading {
+  text-align: center;
+  padding: 3rem;
+  color: var(--text-light);
+  font-size: 1.1rem;
 }
 
 /* Transaction Form Styles */
 .transaction-form {
-  background: white;
-  padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.transaction-form h2 {
-  margin-bottom: 1.5rem;
-  color: #333;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
 }
 
 .form-group {
-  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .form-group label {
-  display: block;
-  margin-bottom: 0.5rem;
-  color: #555;
+  color: var(--text-lighter);
   font-weight: 500;
+  font-size: 0.95rem;
 }
 
-.form-group input {
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+.form-group input,
+.form-group select {
+  background: rgba(26, 31, 54, 0.6);
+  border: 1px solid var(--light-blue);
+  border-radius: 8px;
+  padding: 0.875rem 1rem;
+  color: var(--text-light);
   font-size: 1rem;
+  transition: all 0.2s ease;
 }
 
-.form-group input:focus {
+.form-group input:focus,
+.form-group select:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+  background: rgba(26, 31, 54, 0.8);
+}
+
+.form-group input::placeholder {
+  color: #718096;
 }
 
 .transaction-form button {
-  width: 100%;
-  padding: 1rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--accent-purple) 0%, var(--accent-blue) 100%);
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: 8px;
+  padding: 1rem 2rem;
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
-  transition: transform 0.2s;
+  transition: all 0.3s ease;
+  margin-top: 0.5rem;
 }
 
-.transaction-form button:hover {
+.transaction-form button:hover:not(:disabled) {
   transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+}
+
+.transaction-form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
 }
 
 /* Fraud Chart Styles */
 .fraud-chart {
-  background: white;
-  padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.fraud-chart h2 {
-  margin-bottom: 1.5rem;
-  color: #333;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
 }
 
 .chart-container {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 1rem;
-  margin-bottom: 2rem;
+  gap: 1.5rem;
 }
 
 .stat-box {
+  background: rgba(26, 31, 54, 0.6);
+  border-radius: 12px;
   padding: 1.5rem;
-  border-radius: 8px;
-  background: #f8f9fa;
   text-align: center;
+  border: 1px solid var(--glass-border);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
 }
 
-.stat-box.fraud {
-  background: #fee;
-  border: 2px solid #f88;
+.stat-box::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--light-blue);
 }
 
-.stat-box.legitimate {
-  background: #efe;
-  border: 2px solid #8f8;
+.stat-box.fraud::before {
+  background: var(--fraud-red);
+}
+
+.stat-box.legitimate::before {
+  background: var(--legitimate-green);
+}
+
+.stat-box:hover {
+  transform: translateY(-3px);
+  background: rgba(26, 31, 54, 0.8);
 }
 
 .stat-box h3 {
-  font-size: 0.9rem;
-  color: #666;
-  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-light);
+  margin-bottom: 0.75rem;
   text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
 }
 
 .stat-number {
-  font-size: 2rem;
-  font-weight: bold;
-  color: #333;
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--text-lighter);
   margin-bottom: 0.25rem;
 }
 
 .stat-percentage {
   font-size: 1rem;
-  color: #666;
+  color: var(--text-light);
+  font-weight: 500;
 }
 
 .progress-bar {
   display: flex;
-  height: 30px;
-  border-radius: 4px;
+  height: 12px;
+  border-radius: 6px;
   overflow: hidden;
-  background: #eee;
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .fraud-bar {
-  background: #f44336;
-  transition: width 0.3s ease;
+  background: linear-gradient(90deg, var(--fraud-red), #f56565);
+  transition: width 0.5s ease;
 }
 
 .legitimate-bar {
-  background: #4caf50;
-  transition: width 0.3s ease;
+  background: linear-gradient(90deg, var(--legitimate-green), #48bb78);
+  transition: width 0.5s ease;
 }
 
 /* Transaction List Styles */
 .transaction-list {
-  background: white;
-  padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-height: 600px;
+  overflow-y: auto;
 }
 
-.transaction-list h2 {
-  margin-bottom: 1.5rem;
-  color: #333;
+.transaction-list::-webkit-scrollbar {
+  width: 6px;
 }
 
-.transaction-list table {
-  width: 100%;
-  border-collapse: collapse;
+.transaction-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
 }
 
-.transaction-list thead {
-  background: #f8f9fa;
+.transaction-list::-webkit-scrollbar-thumb {
+  background: var(--accent-blue);
+  border-radius: 3px;
 }
 
-.transaction-list th,
-.transaction-list td {
-  padding: 1rem;
-  text-align: left;
-  border-bottom: 1px solid #eee;
-}
-
-.transaction-list th {
-  font-weight: 600;
-  color: #555;
-  text-transform: uppercase;
-  font-size: 0.85rem;
-}
-
-.transaction-list tr:hover {
-  background: #f8f9fa;
-}
-
-.transaction-list tr.fraud-detected {
-  background: #fff5f5;
-}
-
-.status {
-  padding: 0.25rem 0.75rem;
+.transaction-item {
+  background: rgba(26, 31, 54, 0.6);
+  border: 1px solid var(--glass-border);
   border-radius: 12px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.status.fraud {
-  background: #fee;
-  color: #c33;
-}
-
-.status.legitimate {
-  background: #efe;
-  color: #3c3;
-}
-
-/* Footer Styles */
-.App-footer {
-  background: #333;
-  color: white;
-  text-align: center;
   padding: 1.5rem;
-  margin-top: 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
 }
 
-.App-footer p {
-  opacity: 0.8;
+.transaction-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--light-blue);
+  transition: all 0.3s ease;
+}
+
+.transaction-item.fraud::before {
+  background: var(--fraud-red);
+}
+
+.transaction-item.legitimate::before {
+  background: var(--legitimate-green);
+}
+
+.transaction-item:hover {
+  background: rgba(26, 31, 54, 0.8);
+  transform: translateX(5px);
+}
+
+.transaction-info {
+  flex: 1;
+}
+
+.transaction-amount {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-lighter);
+  margin-bottom: 0.5rem;
+}
+
+.transaction-merchant {
+  color: var(--text-light);
+  margin-bottom: 0.25rem;
+  font-weight: 500;
+}
+
+.transaction-location {
+  color: #a0aec0;
+  font-size: 0.9rem;
+  margin-bottom: 0.25rem;
+}
+
+.transaction-time {
+  color: #718096;
+  font-size: 0.85rem;
+}
+
+.transaction-status {
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  min-width: 80px;
+  text-align: center;
+}
+
+.status-fraud {
+  background: rgba(252, 129, 129, 0.2);
+  color: var(--fraud-red);
+  border: 1px solid var(--fraud-red);
+}
+
+.status-legitimate {
+  background: rgba(104, 211, 145, 0.2);
+  color: var(--legitimate-green);
+  border: 1px solid var(--legitimate-green);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .header h1 {
+    font-size: 2.2rem;
+  }
+  
+  .header p {
+    font-size: 1.1rem;
+  }
+  
+  .dashboard {
+    padding: 1rem;
+    gap: 1.5rem;
+  }
+  
+  .card {
+    padding: 1.5rem;
+  }
+  
+  .chart-container {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  
+  .transaction-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  
+  .transaction-status {
+    align-self: flex-end;
+  }
+}
+
+/* Animation for new transactions */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.transaction-item {
+  animation: slideIn 0.3s ease;
 }

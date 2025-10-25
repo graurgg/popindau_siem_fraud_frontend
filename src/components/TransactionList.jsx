@@ -3,7 +3,7 @@ import React from 'react'
 const TransactionList = ({ transactions }) => {
   if (!transactions || transactions.length === 0) {
     return (
-      <div className="loading" style={{textAlign: 'center', padding: '40px'}}>
+      <div className="loading">
         No transactions found. Submit a transaction to get started.
       </div>
     )
@@ -37,9 +37,9 @@ const TransactionList = ({ transactions }) => {
               transaction.is_fraud ? 'status-fraud' : 'status-legitimate'
             }`}
           >
-            {transaction.is_fraud ? 'FRAUD' : 'OK'}
+            {transaction.is_fraud ? 'FRAUD' : 'LEGITIMATE'}
             {transaction.confidence && (
-              <div style={{fontSize: '12px', marginTop: '5px'}}>
+              <div style={{fontSize: '0.75rem', marginTop: '0.25rem', opacity: 0.8}}>
                 {Math.round(transaction.confidence * 100)}% confidence
               </div>
             )}
