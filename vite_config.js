@@ -8,7 +8,9 @@ export default defineConfig({
     port: 3000,
     host: true,
     open: true // Automatically open browser
+  
   },
+  
   build: {
     outDir: 'dist',
     sourcemap: true
