@@ -1,82 +1,61 @@
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+import axios from 'axios'
 
-/**
- * API service for handling communication with the backend
- */
-const api = {
-  /**
-   * Submit a new transaction for fraud detection
-   * @param {Object} transactionData - Transaction data to submit
-   * @returns {Promise} Response from the API
-   */
-  submitTransaction: async (transactionData) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/transactions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(transactionData),
-      });
+// Use environment variable or default to localhost:8000
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('Error submitting transaction:', error);
-      throw error;
-    }
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
   },
+  timeout: 10000, // 10 second timeout
+})
 
-  /**
-   * Fetch all transactions
-   * @returns {Promise} List of transactions
-   */
-  getTransactions: async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/transactions`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('Error fetching transactions:', error);
-      throw error;
-    }
+// Add request interceptor for logging
+api.interceptors.request.use(
+  (config) => {
+    console.log(`Making ${config.method?.toUpperCase()} request to: ${config.url}`)
+    return config
   },
+  (error) => {
+    console.error('Request error:', error)
+    return Promise.reject(error)
+  }
+)
 
-  /**
-   * Get fraud statistics
-   * @returns {Promise} Fraud statistics data
-   */
-  getFraudStats: async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/stats`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('Error fetching fraud stats:', error);
-      throw error;
-    }
+// Add response interceptor for error handling
+api.interceptors.response.use(
+  (response) => {
+    return response
   },
-};
+  (error) => {
+    console.error('API Error:', error.response?.status, error.response?.data)
+    
+    if (error.code === 'ECONNREFUSED') {
+      throw new Error('Cannot connect to backend server. Make sure it is running on port 8000.')
+    }
+    
+    if (error.response?.status >= 500) {
+      throw new Error('Backend server error. Please try again later.')
+    }
+    
+    throw error
+  }
+)
 
-export default api;
+export const createTransaction = async (transactionData) => {
+  const response = await api.post('/transactions', transactionData)
+  return response.data
+}
+
+export const getTransactions = async (limit = 50) => {
+  const response = await api.get(`/transactions?limit=${limit}`)
+  return response.data
+}
+
+export const healthCheck = async () => {
+  const response = await api.get('/health')
+  return response.data
+}
+
+export default api
