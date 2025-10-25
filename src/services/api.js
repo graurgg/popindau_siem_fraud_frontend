@@ -48,8 +48,8 @@ export const createTransaction = async (transactionData) => {
   return response.data
 }
 
-export const getTransactions = async (limit = 50) => {
-  const response = await api.get(`/transactions?limit=${limit}`)
+export const getTransactions = async () => {
+  const response = await api.get(`/transactions`)
   return response.data
 }
 
