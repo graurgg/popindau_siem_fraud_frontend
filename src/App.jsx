@@ -124,7 +124,7 @@ const App = () => {
                         alignItems: 'start',
                     }}
                     className="top-section-layout"
-                    >
+                >
                     <KpiOverview analysis={fraudAnalysis} />
                 </div>
 

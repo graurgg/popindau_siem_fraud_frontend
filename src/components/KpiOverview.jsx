@@ -33,24 +33,22 @@ const KpiOverview = ({ analysis }) => {
     }
 
     return (
-  <div
-    style={{
-      display: 'grid',
-      gridTemplateColumns: 'repeat(4, 1fr)',
-      gap: '1rem',
-      width: '100%',
-      alignItems: 'stretch',
-      justifyItems: 'center',
-      padding: 0,
-    }}
-    className="kpi-container"
-  >
-    <TotalTransactions totalCount={analysis.totalCount} />
-    <FraudRate fraudRate={analysis.fraudRate} />
-    <TotalFraudRate fraudValue={analysis.fraudValue} />
-    <TotalFraudTransactions fraudCount={analysis.fraudCount} />
-  </div>
-);
+        <div
+            style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, 1fr)', // always 4 equal columns
+                gap: '2rem',
+                width: '175%',
+                padding: '0 1rem',
+            }}
+            className="kpi-container"
+        >
+            <TotalTransactions totalCount={analysis.totalCount} />
+            <FraudRate fraudRate={analysis.fraudRate} />
+            <TotalFraudRate fraudValue={analysis.fraudValue} />
+            <TotalFraudTransactions fraudCount={analysis.fraudCount} />
+        </div>
+    );
 };
 
 export default KpiOverview;
