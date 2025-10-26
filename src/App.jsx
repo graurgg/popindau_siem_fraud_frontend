@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import TransactionList from './components/TransactionList';
-import KpiOverview from './components/KpiOverview'; // Importăm componenta Overview
+import KpiOverview from './components/KpiOverview';
 import { getTransactions } from './services/api';
+import worldMap from './assets/world_map_2D.png';
 import './App.css';
 
 // Logica simplă de determinare a statusului (pentru a fi folosită în useMemo)
 const getTransactionStatus = (tx) => {
     if (tx.status && tx.status.toUpperCase() === 'FRAUDA') return 'FRAUDA';
     if (tx.fraud_flag !== undefined && tx.fraud_flag === 1) return 'FRAUDA';
-    // Regula simplă de test (suma > $100)
     if (parseFloat(tx.amount) > 100) return 'FRAUDA'; 
     if (tx.status && tx.status.toUpperCase() === 'ALERT') return 'ALERT';
     return 'LEGITIM';
@@ -18,14 +18,12 @@ const getTransactionStatus = (tx) => {
 const calculateAge = (dobString) => {
     if (!dobString) return 0;
     try {
-        // Presupunem formatul YYYY-MM-DD
         const birthDate = new Date(dobString);
         const today = new Date();
         
         let age = today.getFullYear() - birthDate.getFullYear();
         const monthDifference = today.getMonth() - birthDate.getMonth();
         
-        // Ajustăm vârsta dacă ziua de naștere nu a trecut încă în acest an
         if (monthDifference < 0 || (monthDifference === 0 && today.getDate() < birthDate.getDate())) {
             age--;
         }
@@ -36,7 +34,189 @@ const calculateAge = (dobString) => {
         return 0;
     }
 };
-// ===================================================
+
+// === Mercator Projection Functions ===
+const longitudeToX = (longitude, mapWidth) => {
+    return ((longitude + 180) / 360) * mapWidth;
+};
+
+const latitudeToY = (latitude, mapHeight, mapWidth) => {
+    const latRad = (latitude * Math.PI) / 180;
+    const mercN = Math.log(Math.tan(Math.PI / 4 + latRad / 2));
+    return (mapHeight / 2) - (mapWidth * mercN / (2 * Math.PI));
+};
+
+const latLngToMercator = (lat, lng, mapWidth, mapHeight) => {
+    const boundedLat = Math.max(-85, Math.min(85, lat));
+    const boundedLng = Math.max(-180, Math.min(180, lng));
+    
+    const x = longitudeToX(boundedLng, mapWidth);
+    const y = latitudeToY(boundedLat, mapHeight, mapWidth);
+    
+    return { x, y };
+};
+
+// === Componenta pentru Harta cu Fraude ===
+const FraudWorldMap = ({ transactions }) => {
+    const mapWidth = 1000;  // Increased width to accommodate offset
+    const mapHeight = 450; // Increased height for better proportions
+
+    const fraudPoints = useMemo(() => {
+        return transactions
+            .filter(tx => {
+                const status = getTransactionStatus(tx);
+                return status === 'FRAUDA';
+            })
+            .map(tx => {
+                const lat = parseFloat(tx.lat);
+                const lng = parseFloat(tx.lng);
+                
+                if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+                    return null;
+                }
+                
+                // Apply offset to shift points to the right
+                const position = latLngToMercator(lat, lng, mapWidth, mapHeight);
+                position.x -= 10;
+                position.y += 70;
+                
+                const boundedX = Math.max(5, Math.min(mapWidth - 5, position.x));
+                const boundedY = Math.max(5, Math.min(mapHeight - 5, position.y));
+                
+                return {
+                    x: boundedX,
+                    y: boundedY,
+                    amount: parseFloat(tx.amount).toFixed(2),
+                    latitude: lat,
+                    longitude: lng,
+                    city: tx.city || 'N/A',
+                    state: tx.state || 'N/A',
+                };
+            })
+            .filter(point => point !== null);
+    }, [transactions]);
+
+    return (
+        <div className="card" style={{ height: 'fit-content' }}>
+            <h3>Global Fraud Distribution</h3>
+            <div style={{ 
+                position: 'relative', 
+                width: `${mapWidth}px`, 
+                height: `${mapHeight}px`, 
+                borderRadius: '12px',
+                overflow: 'hidden',
+                border: '3px solid #e2e8f0',
+                boxShadow: '0 8px 25px rgba(0, 0, 0, 0.15)',
+                backgroundColor: '#f8fafc', // Background color for the frame
+                padding: '0', // Remove any padding
+                margin: '0 auto' // Center the map container
+            }}>
+                {/* World Map Background - Centered with offset */}
+                <div style={{
+                    position: 'absolute',
+                    width: '100%', // Slightly smaller to show frame
+                    height: '100%', // Slightly smaller to show frame
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                }}>
+                    <img 
+                        src={worldMap} 
+                        alt="World Map" 
+                        style={{ 
+                            width: '100%', 
+                            height: '100%', 
+                            objectFit: 'contain', // Changed to contain to show full map
+                            display: 'block'
+                        }} 
+                    />
+                </div>
+                
+                {/* Fraud Dots Overlay */}
+                <div style={{ 
+                    position: 'absolute', 
+                    top: 0, 
+                    left: 0, 
+                    width: '100%', 
+                    height: '100%' 
+                }}>
+                    {fraudPoints.map((point) => (
+                        <div
+                            key={point.id}
+                            style={{
+                                position: 'absolute',
+                                left: `${point.x}px`,
+                                top: `${point.y}px`,
+                                width: '12px',
+                                height: '12px',
+                                backgroundColor: '#dc2626',
+                                borderRadius: '50%',
+                                border: '2px solid #7f1d1d',
+                                transform: 'translate(-50%, -50%)',
+                                cursor: 'pointer',
+                                boxShadow: '0 3px 8px rgba(0, 0, 0, 0.4)',
+                                transition: 'all 0.3s ease',
+                                zIndex: 10
+                            }}
+                            title={`$"Amount: "${point.amount}\n"Latitude: "${point.latitude}\n"Longitude: " ${point.longitude}\n"City: "${point.city}\n"State: "${point.state}`}
+                            onMouseEnter={(e) => {
+                                e.target.style.width = '18px';
+                                e.target.style.height = '18px';
+                                e.target.style.backgroundColor = '#ef4444';
+                                e.target.style.boxShadow = '0 0 0 6px rgba(239, 68, 68, 0.3)';
+                                e.target.style.zIndex = 20;
+                            }}
+                            onMouseLeave={(e) => {
+                                e.target.style.width = '12px';
+                                e.target.style.height = '12px';
+                                e.target.style.backgroundColor = '#dc2626';
+                                e.target.style.boxShadow = '0 3px 8px rgba(0, 0, 0, 0.4)';
+                                e.target.style.zIndex = 10;
+                            }}
+                        />
+                    ))}
+                </div>
+
+                {/* Decorative frame elements */}
+                <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    border: '2px solid rgba(255, 255, 255, 0.8)',
+                    borderRadius: '10px',
+                    pointerEvents: 'none'
+                }} />
+            </div>
+            
+            {/* Legend */}
+            <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                marginTop: '1.5rem',
+                fontSize: '0.9rem',
+                padding: '0.5rem',
+                backgroundColor: '#f8fafc',
+                borderRadius: '8px',
+                border: '1px solid #e2e8f0'
+            }}>
+                <div style={{ 
+                    width: '12px', 
+                    height: '12px', 
+                    backgroundColor: '#dc2626', 
+                    borderRadius: '50%', 
+                    border: '2px solid #7f1d1d',
+                    marginRight: '0.75rem'
+                }}></div>
+                <span style={{ fontWeight: '600', color: '#374151' }}>
+                    Fraud Locations: {Math.min(fraudPoints.length, 100)}
+                </span>
+            </div>
+        </div>
+    );
+};
 
 // === Componenta pentru Graficul Vârstă vs Fraud ===
 const AgeFraudChart = ({ data }) => {
@@ -49,7 +229,6 @@ const AgeFraudChart = ({ data }) => {
         );
     }
 
-    // Găsim valoarea maximă pentru scalare
     const maxCount = Math.max(...data.map(item => item.fraudCount));
     
     return (
@@ -74,7 +253,7 @@ const AgeFraudChart = ({ data }) => {
                             <div style={{ 
                                 flex: 1, 
                                 marginLeft: '1rem',
-                                backgroundColor: '#ff6b6b',
+                                backgroundColor: '#f7afafff',
                                 height: '30px',
                                 borderRadius: '4px',
                                 position: 'relative',
@@ -103,20 +282,18 @@ const AgeFraudChart = ({ data }) => {
         </div>
     );
 };
-// ===================================================
 
 const App = () => {
     const [transactions, setTransactions] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
-    // --- Preluarea Datelor ---
     const fetchTransactions = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
             const data = await getTransactions();
-            setTransactions(prev => [...prev, ...data]); // pentru batch
+            setTransactions(prev => [...prev, ...data]);
         } catch (err) {
             console.error("Eroare la preluarea tranzacțiilor:", err);
             setError("Nu s-au putut încărca tranzacțiile.");
@@ -129,11 +306,9 @@ const App = () => {
         fetchTransactions();
     }, [fetchTransactions]);
 
-    // --- Analiza Vârstelor pentru Fraud ---
     const ageFraudData = useMemo(() => {
         if (transactions.length === 0) return [];
 
-        // Grupăm vârstele în intervale
         const ageGroups = {
             '18-25': { min: 18, max: 25, fraudCount: 0 },
             '26-35': { min: 26, max: 35, fraudCount: 0 },
@@ -143,7 +318,6 @@ const App = () => {
             '65+': { min: 66, max: 200, fraudCount: 0 }
         };
 
-        // Numărăm fraudele pe intervale de vârstă
         transactions.forEach(tx => {
             const status = getTransactionStatus(tx);
             if (status === 'FRAUDA') {
@@ -159,14 +333,12 @@ const App = () => {
             }
         });
 
-        // Convertim în array pentru afișare
         return Object.entries(ageGroups).map(([ageRange, data]) => ({
             ageRange,
             fraudCount: data.fraudCount
         }));
     }, [transactions]);
 
-    // --- Logica de Analiză (KPI) ---
     const fraudAnalysis = useMemo(() => {
         if (transactions.length === 0) {
             return { totalCount: 0, fraudCount: 0, fraudValue: 0, fraudRate: 0, alertCount: 0 };
@@ -181,9 +353,7 @@ const App = () => {
             
             if (status === 'FRAUDA') {
                 fraudCount++;
-                // === CALCUL SUMĂ FRAUDĂ (ROBUST) ===
                 const amountValue = parseFloat(tx.amount);
-                // Adunăm suma doar dacă este un număr valid (protecție împotriva NaN)
                 fraudValue += isNaN(amountValue) ? 0 : amountValue;
             }
             if (status === 'ALERT') {
@@ -197,53 +367,107 @@ const App = () => {
         return { totalCount, fraudCount, fraudValue, fraudRate, alertCount };
     }, [transactions]);
 
-    // --- Randarea ---
     return (
         <div className="app">
-            {/* 1. HEADER */}
             <header className="header">
-                <h1>SIEM Fraud Detection Dashboard</h1>
-                <p>Real-time transaction monitoring and fraud analysis</p>
+            <h1>SIEM Fraud Detection Dashboard</h1>
+            <p>Real-time transaction monitoring and fraud analysis</p>
             </header>
-            
-            <div className="dashboard">
-                
-                {/* ------------------------------------------------------------- */}
-                {/* SECȚIUNEA SUPERIOARĂ: KPI-uri (via KpiOverview) */}
+
+            <div
+            className="dashboard"
+            style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '2.5rem',
+                padding: '2rem',
+            }}
+            >
+            {/* === TOP SECTION: KPI + AGE CHART === */}
+            <div
+            style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '1rem', // micșorăm spațiul vertical dintre rânduri
+                width: '100%',
+                marginBottom: '1rem',
+            }}
+            >
+            {/* Container comun pentru KPI-uri + Chart */}
+            <div
+                style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'flex-start',
+                gap: '1.5rem', // distanța mică între KPI-uri și grafic
+                flexWrap: 'wrap',
+                maxWidth: '1200px',
+                width: '100%',
+                }}
+            >
+                {/* Stânga: KPI 2x2 */}
                 <div
-                    style={{
-                        display: 'grid',
-                        gridTemplateColumns: '1fr',
-                        gap: '2rem',
-                        alignItems: 'start',
-                    }}
-                    className="top-section-layout"
+                style={{
+                    display: 'flex',
+                    justifyContent: 'center',
+                    flex: '1 1 600px',
+                }}
                 >
-                    <KpiOverview analysis={fraudAnalysis} />
+                <KpiOverview analysis={fraudAnalysis} transactions={transactions} />
                 </div>
 
-                {/* ------------------------------------------------------------- */}
-                {/* SECȚIUNEA CHART: Graficul Vârstă vs Fraud */}
+                {/* Dreapta: Distribuția Fraudelor pe Vârste */}
                 <div
-                    style={{
-                        display: 'grid',
-                        gridTemplateColumns: '1fr',
-                        gap: '2rem',
-                        marginTop: '1rem',
-                    }}
+                style={{
+                    display: 'flex',
+                    justifyContent: 'center',
+                    flex: '0 1 400px',
+                }}
                 >
-                    <AgeFraudChart data={ageFraudData} />
+                <AgeFraudChart data={ageFraudData} />
                 </div>
-
-                {/* ------------------------------------------------------------- */}
-                {/* SECȚIUNEA INFERIOARĂ: LISTA DE TRANZACȚII */}
-                <div className="card full-width">
-                    <TransactionList transactions={transactions} loading={loading} error={error} />
-                </div>
-                
             </div>
-            
-            {error && <div className="error">{error} <button onClick={() => setError(null)}>OK</button></div>}
+            </div>
+
+
+            {/* === FRAUD MAP === */}
+            <div
+                style={{
+                display: 'flex',
+                justifyContent: 'center',
+                width: '100%',
+                }}
+            >
+                <FraudWorldMap transactions={transactions} />
+            </div>
+
+            {/* === TRANSACTIONS LIST === */}
+            <div
+                style={{
+                display: 'flex',
+                justifyContent: 'center',
+                width: '100%',
+                }}
+            >
+                <div
+                className="card"
+                style={{
+                    width: '95%',
+                    maxWidth: '1200px',
+                }}
+                >
+                <TransactionList transactions={transactions} loading={loading} error={error} />
+                </div>
+            </div>
+            </div>
+
+            {error && (
+            <div className="error">
+                {error} <button onClick={() => setError(null)}>OK</button>
+            </div>
+            )}
         </div>
     );
 };
