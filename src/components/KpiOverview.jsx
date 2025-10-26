@@ -33,24 +33,24 @@ const KpiOverview = ({ analysis }) => {
     }
 
     return (
-        <div 
-            style={{ 
-                display: 'grid', 
-                gridTemplateColumns: '1fr 1fr', 
-                gap: '1rem',
-                padding: '0', 
-                minWidth: '280px' 
-            }}
-            className="kpi-container"
-        >
-            {/* Componentele individuale primesc datele necesare */}
-            <TotalTransactions totalCount={analysis.totalCount} />
-            <FraudRate fraudRate={analysis.fraudRate} />
-            <TotalFraudRate fraudValue={analysis.fraudValue} />
-            <TotalFraudTransactions fraudCount={analysis.fraudCount} />
-            <VulnerableAge averageFraudAge={analysis.averageFraudAge} />
-        </div>
-    );
+  <div
+    style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(4, 1fr)',
+      gap: '1rem',
+      width: '100%',
+      alignItems: 'stretch',
+      justifyItems: 'center',
+      padding: 0,
+    }}
+    className="kpi-container"
+  >
+    <TotalTransactions totalCount={analysis.totalCount} />
+    <FraudRate fraudRate={analysis.fraudRate} />
+    <TotalFraudRate fraudValue={analysis.fraudValue} />
+    <TotalFraudTransactions fraudCount={analysis.fraudCount} />
+  </div>
+);
 };
 
 export default KpiOverview;
