@@ -13,7 +13,7 @@ const TotalFraudRate = ({ fraudValue }) => {
       title="Valoarea Totală Fraudă"
       value={formatted}
       unit="$"
-      iconProp="💰"
+      iconProp="$"
     />
   );
 };
