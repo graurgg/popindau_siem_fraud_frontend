@@ -1,16 +1,18 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo , useRef } from 'react';
 import TransactionList from './components/TransactionList';
 import KpiOverview from './components/KpiOverview';
 import { getTransactions } from './services/api';
 import worldMap from './assets/world_map_2D.png';
 import './App.css';
+import { TransactionSSE } from './services/sse';
 
 // === Transaction Normalization Function ===
+// === Transaction Normalization Function ===
 const normalizeTransaction = (tx) => {
-    console.log('Raw transaction:', tx); // Debug log
+    console.log('Raw transaction:', tx);
     
     // Handle both direct transactions and transactions with data wrapper
-    const transactionData = tx.data || tx;
+    const transactionData = tx.data ? tx.data : tx;
     
     // Generate unique ID using trans_num + timestamp + random suffix
     const generateUniqueId = () => {
@@ -21,14 +23,14 @@ const normalizeTransaction = (tx) => {
     };
     
     return {
-        // ID fields - generate unique ID to prevent duplicates
+        // ID fields
         transaction_id: transactionData.transaction_id || generateUniqueId(),
         trans_num: transactionData.trans_num,
         
         // Amount fields
         amount: transactionData.amt || transactionData.amount || 0,
         
-        // Status field (from your transaction example)
+        // Status field
         status: transactionData.status,
         
         // Fraud detection data
@@ -48,10 +50,12 @@ const normalizeTransaction = (tx) => {
         category: transactionData.category || (transactionData.raw_data && transactionData.raw_data.category),
         merchant: transactionData.merchant || (transactionData.raw_data && transactionData.raw_data.merchant),
         
-        // Location data
+        // Location data - CRITICAL FOR MAP
         city: transactionData.city || (transactionData.raw_data && transactionData.raw_data.city),
         state: transactionData.state || (transactionData.raw_data && transactionData.raw_data.state),
         city_pop: transactionData.city_pop || (transactionData.raw_data && transactionData.raw_data.city_pop),
+        lat: transactionData.lat || (transactionData.raw_data && transactionData.raw_data.lat),
+        long: transactionData.long || (transactionData.raw_data && transactionData.raw_data.long),
         
         // Keep original transaction for reference
         _original: tx
@@ -60,32 +64,27 @@ const normalizeTransaction = (tx) => {
 
 // Updated Fraud detection logic based on fraud_detection data
 const getTransactionStatus = (tx) => {
-    // Use the fraud_detection data if available
-    if (tx.fraud_detection) {
-        const fraudProbability = tx.fraud_detection.fraud_probability || 0;
-        
-        if (fraudProbability >= 0.15) return 'FRAUD';
-        if (fraudProbability >= 0.1) return 'ALERT';
-        return 'LEGITIMATE';
-    }
-    
-    // Fallback to old logic if no fraud_detection data
-    const amount = parseFloat(tx.amount || 0);
-    
-    // Rule 1: High amount transactions
-    if (amount > 500) return 'FRAUD';
-    
-    // Rule 2: Specific fraudulent merchants
-    if (tx.merchant && tx.merchant.toLowerCase().includes('fraud')) return 'FRAUD';
-    
-    // Rule 3: Suspicious categories
-    const suspiciousCategories = ['gambling', 'cash_advance'];
-    if (tx.category && suspiciousCategories.includes(tx.category)) return 'ALERT';
-    
-    // Rule 4: Shopping net with high amount
-    if (tx.category === 'shopping_net' && amount > 300) return 'ALERT';
-    
+  if (tx.fraud_detection) {
+    const fraudProbability = 
+      tx.fraud_detection.fraud_probability ?? 
+      tx.fraud_detection.probability ?? 
+      0;
+
+    if (fraudProbability >= 0.15) return 'FRAUD';
+    if (fraudProbability >= 0.1) return 'ALERT';
     return 'LEGITIMATE';
+  }
+
+  const amount = parseFloat(tx.amount || 0);
+  if (amount > 500) return 'FRAUD';
+  if (tx.merchant && tx.merchant.toLowerCase().includes('fraud')) return 'FRAUD';
+
+  const suspiciousCategories = ['gambling', 'cash_advance'];
+  if (tx.category && suspiciousCategories.includes(tx.category)) return 'ALERT';
+
+  if (tx.category === 'shopping_net' && amount > 300) return 'ALERT';
+
+  return 'LEGITIMATE';
 };
 
 // === Funcție Ajutătoare pentru Calculul Vârstei ===
@@ -120,176 +119,14 @@ const latitudeToY = (latitude, mapHeight, mapWidth) => {
     return (mapHeight / 2) - (mapWidth * mercN / (2 * Math.PI));
 };
 
-const latLngToMercator = (lat, lng, mapWidth, mapHeight) => {
+const latlongToMercator = (lat, long, mapWidth, mapHeight) => {
     const boundedLat = Math.max(-85, Math.min(85, lat));
-    const boundedLng = Math.max(-180, Math.min(180, lng));
+    const boundedlong = Math.max(-180, Math.min(180, long));
     
-    const x = longitudeToX(boundedLng, mapWidth);
+    const x = longitudeToX(boundedlong, mapWidth);
     const y = latitudeToY(boundedLat, mapHeight, mapWidth);
     
     return { x, y };
-};
-
-// === Componenta pentru Harta cu Fraude ===
-const FraudWorldMap = ({ transactions }) => {
-    const mapWidth = 1000;  // Increased width to accommodate offset
-    const mapHeight = 450; // Increased height for better proportions
-
-    const fraudPoints = useMemo(() => {
-        return transactions
-            .filter(tx => {
-                const status = getTransactionStatus(tx);
-                return status === 'FRAUDA';
-            })
-            .map(tx => {
-                const lat = parseFloat(tx.lat);
-                const lng = parseFloat(tx.lng);
-                
-                if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-                    return null;
-                }
-                
-                // Apply offset to shift points to the right
-                const position = latLngToMercator(lat, lng, mapWidth, mapHeight);
-                position.x -= 10;
-                position.y += 70;
-                
-                const boundedX = Math.max(5, Math.min(mapWidth - 5, position.x));
-                const boundedY = Math.max(5, Math.min(mapHeight - 5, position.y));
-                
-                return {
-                    x: boundedX,
-                    y: boundedY,
-                    amount: parseFloat(tx.amount).toFixed(2),
-                    latitude: lat,
-                    longitude: lng,
-                    city: tx.city || 'N/A',
-                    state: tx.state || 'N/A',
-                };
-            })
-            .filter(point => point !== null);
-    }, [transactions]);
-
-    return (
-        <div className="card" style={{ height: 'fit-content' }}>
-            <h3>Global Fraud Distribution</h3>
-            <div style={{ 
-                position: 'relative', 
-                width: `${mapWidth}px`, 
-                height: `${mapHeight}px`, 
-                borderRadius: '12px',
-                overflow: 'hidden',
-                border: '3px solid #e2e8f0',
-                boxShadow: '0 8px 25px rgba(0, 0, 0, 0.15)',
-                backgroundColor: '#f8fafc', // Background color for the frame
-                padding: '0', // Remove any padding
-                margin: '0 auto' // Center the map container
-            }}>
-                {/* World Map Background - Centered with offset */}
-                <div style={{
-                    position: 'absolute',
-                    width: '100%', // Slightly smaller to show frame
-                    height: '100%', // Slightly smaller to show frame
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                }}>
-                    <img 
-                        src={worldMap} 
-                        alt="World Map" 
-                        style={{ 
-                            width: '100%', 
-                            height: '100%', 
-                            objectFit: 'contain', // Changed to contain to show full map
-                            display: 'block'
-                        }} 
-                    />
-                </div>
-                
-                {/* Fraud Dots Overlay */}
-                <div style={{ 
-                    position: 'absolute', 
-                    top: 0, 
-                    left: 0, 
-                    width: '100%', 
-                    height: '100%' 
-                }}>
-                    {fraudPoints.map((point) => (
-                        <div
-                            key={point.id}
-                            style={{
-                                position: 'absolute',
-                                left: `${point.x}px`,
-                                top: `${point.y}px`,
-                                width: '12px',
-                                height: '12px',
-                                backgroundColor: '#dc2626',
-                                borderRadius: '50%',
-                                border: '2px solid #7f1d1d',
-                                transform: 'translate(-50%, -50%)',
-                                cursor: 'pointer',
-                                boxShadow: '0 3px 8px rgba(0, 0, 0, 0.4)',
-                                transition: 'all 0.3s ease',
-                                zIndex: 10
-                            }}
-                            title={`$"Amount: "${point.amount}\n"Latitude: "${point.latitude}\n"Longitude: " ${point.longitude}\n"City: "${point.city}\n"State: "${point.state}`}
-                            onMouseEnter={(e) => {
-                                e.target.style.width = '18px';
-                                e.target.style.height = '18px';
-                                e.target.style.backgroundColor = '#ef4444';
-                                e.target.style.boxShadow = '0 0 0 6px rgba(239, 68, 68, 0.3)';
-                                e.target.style.zIndex = 20;
-                            }}
-                            onMouseLeave={(e) => {
-                                e.target.style.width = '12px';
-                                e.target.style.height = '12px';
-                                e.target.style.backgroundColor = '#dc2626';
-                                e.target.style.boxShadow = '0 3px 8px rgba(0, 0, 0, 0.4)';
-                                e.target.style.zIndex = 10;
-                            }}
-                        />
-                    ))}
-                </div>
-
-                {/* Decorative frame elements */}
-                <div style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    border: '2px solid rgba(255, 255, 255, 0.8)',
-                    borderRadius: '10px',
-                    pointerEvents: 'none'
-                }} />
-            </div>
-            
-            {/* Legend */}
-            <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center',
-                marginTop: '1.5rem',
-                fontSize: '0.9rem',
-                padding: '0.5rem',
-                backgroundColor: '#f8fafc',
-                borderRadius: '8px',
-                border: '1px solid #e2e8f0'
-            }}>
-                <div style={{ 
-                    width: '12px', 
-                    height: '12px', 
-                    backgroundColor: '#dc2626', 
-                    borderRadius: '50%', 
-                    border: '2px solid #7f1d1d',
-                    marginRight: '0.75rem'
-                }}></div>
-                <span style={{ fontWeight: '600', color: '#374151' }}>
-                    Fraud Locations: {Math.min(fraudPoints.length, 100)}
-                </span>
-            </div>
-        </div>
-    );
 };
 
 // === Componenta pentru Graficul Vârstă vs Fraud ===
@@ -357,7 +194,253 @@ const AgeFraudChart = ({ data }) => {
     );
 };
 
+// === Componenta pentru Harta cu Fraude ===
+// === Componenta pentru Harta cu Fraude ===
+// === Componenta pentru Harta cu Fraude ===
+const FraudWorldMap = ({ transactions, maxPoints = 100 }) => {
+    const mapWidth = 1000;
+    const mapHeight = 450;
+
+    const fraudPoints = useMemo(() => {
+        console.log('=== MAP DEBUG - Processing transactions ===');
+        
+        const points = transactions
+            .filter(tx => {
+                const status = getTransactionStatus(tx);
+                const isFraud = status === 'FRAUD';
+                
+                if (!isFraud) return false;
+
+                // Comprehensive coordinate extraction
+                let lat, long;
+                
+                // Try multiple possible locations for coordinates
+                if (tx.lat !== undefined && tx.long !== undefined) {
+                    lat = tx.lat;
+                    long = tx.long;
+                } else if (tx._original?.lat !== undefined && tx._original?.long !== undefined) {
+                    lat = tx._original.lat;
+                    long = tx._original.long;
+                } else if (tx._original?.data?.lat !== undefined && tx._original?.data?.long !== undefined) {
+                    lat = tx._original.data.lat;
+                    long = tx._original.data.long;
+                } else if (tx._original?.raw_data?.lat !== undefined && tx._original?.raw_data?.long !== undefined) {
+                    lat = tx._original.raw_data.lat;
+                    long = tx._original.raw_data.long;
+                } else {
+                    console.log('No coordinates found for fraud transaction:', tx.trans_num);
+                    return false;
+                }
+
+                lat = parseFloat(lat);
+                long = parseFloat(long);
+                
+                if (isNaN(lat) || isNaN(long) || lat < -90 || lat > 90 || long < -180 || long > 180) {
+                    console.log('Invalid coordinates:', { trans_num: tx.trans_num, lat, long });
+                    return false;
+                }
+                
+                console.log('Valid fraud transaction with coordinates:', { trans_num: tx.trans_num, lat, long });
+                return true;
+            })
+            .map(tx => {
+                // Extract coordinates using the same logic as above
+                let lat, long;
+                
+                if (tx.lat !== undefined && tx.long !== undefined) {
+                    lat = tx.lat;
+                    long = tx.long;
+                } else if (tx._original?.lat !== undefined && tx._original?.long !== undefined) {
+                    lat = tx._original.lat;
+                    long = tx._original.long;
+                } else if (tx._original?.data?.lat !== undefined && tx._original?.data?.long !== undefined) {
+                    lat = tx._original.data.lat;
+                    long = tx._original.data.long;
+                } else {
+                    lat = tx._original.raw_data.lat;
+                    long = tx._original.raw_data.long;
+                }
+
+                lat = parseFloat(lat);
+                long = parseFloat(long);
+                
+                // Apply offset to shift points to the right
+                const position = latlongToMercator(lat, long, mapWidth, mapHeight);
+                position.x -= 10;
+                position.y += 70;
+                
+                const boundedX = Math.max(5, Math.min(mapWidth - 5, position.x));
+                const boundedY = Math.max(5, Math.min(mapHeight - 5, position.y));
+                
+                return {
+                    id: tx.transaction_id || tx.trans_num || Math.random().toString(36).substr(2, 9),
+                    x: boundedX,
+                    y: boundedY,
+                    amount: parseFloat(tx.amount || 0).toFixed(2),
+                    latitude: lat,
+                    longitude: long,
+                    city: tx.city || 'N/A',
+                    state: tx.state || 'N/A',
+                    transaction_id: tx.transaction_id,
+                    trans_num: tx.trans_num,
+                    timestamp: tx.timestamp || tx._original?.timestamp || tx._original?.created_at || Date.now()
+                };
+            });
+
+        console.log('=== MAP DEBUG - Generated points:', points.length);
+        
+        // Apply maximum points limit - keep only the most recent points
+        let limitedPoints = points;
+        if (points.length > maxPoints) {
+            // Sort by timestamp (newest first) and keep only the most recent ones
+            limitedPoints = points
+                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+                .slice(0, maxPoints);
+            console.log(`Limited points from ${points.length} to ${maxPoints} most recent`);
+        }
+        
+        return limitedPoints;
+    }, [transactions, maxPoints]);
+
+    console.log('=== MAP RENDER - Fraud points:', fraudPoints.length);
+
+    return (
+        <div className="card" style={{ height: 'fit-content' }}>
+            <h3>Global Fraud Distribution</h3>
+            <div style={{ 
+                position: 'relative', 
+                width: `${mapWidth}px`, 
+                height: `${mapHeight}px`, 
+                borderRadius: '12px',
+                overflow: 'hidden',
+                border: '3px solid #e2e8f0',
+                boxShadow: '0 8px 25px rgba(0, 0, 0, 0.15)',
+                backgroundColor: '#f8fafc',
+                padding: '0',
+                margin: '0 auto'
+            }}>
+                {/* World Map Background */}
+                <div style={{
+                    position: 'absolute',
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                }}>
+                    <img 
+                        src={worldMap} 
+                        alt="World Map" 
+                        style={{ 
+                            width: '100%', 
+                            height: '100%', 
+                            objectFit: 'contain',
+                            display: 'block'
+                        }} 
+                    />
+                </div>
+                
+                {/* Fraud Dots Overlay */}
+                <div style={{ 
+                    position: 'absolute', 
+                    top: 0, 
+                    left: 0, 
+                    width: '100%', 
+                    height: '100%' 
+                }}>
+                    {fraudPoints.map((point) => (
+                        <div
+                            key={point.id}
+                            style={{
+                                position: 'absolute',
+                                left: `${point.x}px`,
+                                top: `${point.y}px`,
+                                width: '12px',
+                                height: '12px',
+                                backgroundColor: '#dc2626',
+                                borderRadius: '50%',
+                                border: '2px solid #7f1d1d',
+                                transform: 'translate(-50%, -50%)',
+                                cursor: 'pointer',
+                                boxShadow: '0 3px 8px rgba(0, 0, 0, 0.4)',
+                                transition: 'all 0.3s ease',
+                                zIndex: 10
+                            }}
+                            title={`Amount: $${point.amount}\nLatitude: ${point.latitude}\nLongitude: ${point.longitude}\nCity: ${point.city}\nState: ${point.state}\nTime: ${new Date(point.timestamp).toLocaleString()}`}
+                            onMouseEnter={(e) => {
+                                e.target.style.width = '18px';
+                                e.target.style.height = '18px';
+                                e.target.style.backgroundColor = '#ef4444';
+                                e.target.style.boxShadow = '0 0 0 6px rgba(239, 68, 68, 0.3)';
+                                e.target.style.zIndex = 20;
+                            }}
+                            onMouseLeave={(e) => {
+                                e.target.style.width = '12px';
+                                e.target.style.height = '12px';
+                                e.target.style.backgroundColor = '#dc2626';
+                                e.target.style.boxShadow = '0 3px 8px rgba(0, 0, 0, 0.4)';
+                                e.target.style.zIndex = 10;
+                            }}
+                        />
+                    ))}
+                </div>
+
+                {/* Decorative frame */}
+                <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    border: '2px solid rgba(255, 255, 255, 0.8)',
+                    borderRadius: '10px',
+                    pointerEvents: 'none'
+                }} />
+            </div>
+            
+            {/* Legend */}
+            <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                marginTop: '1.5rem',
+                fontSize: '0.9rem',
+                padding: '0.5rem',
+                backgroundColor: '#f8fafc',
+                borderRadius: '8px',
+                border: '1px solid #e2e8f0'
+            }}>
+                <div style={{ 
+                    width: '12px', 
+                    height: '12px', 
+                    backgroundColor: '#dc2626', 
+                    borderRadius: '50%', 
+                    border: '2px solid #7f1d1d',
+                    marginRight: '0.75rem'
+                }}></div>
+                <span style={{ fontWeight: '600', color: '#374151' }}>
+                    Fraud Locations: {fraudPoints.length} {fraudPoints.length >= maxPoints ? `(showing ${maxPoints} most recent)` : ''}
+                </span>
+            </div>
+
+            {/* Additional info about oldest point removal */}
+            {fraudPoints.length >= maxPoints && (
+                <div style={{ 
+                    textAlign: 'center',
+                    marginTop: '0.5rem',
+                    fontSize: '0.8rem',
+                    color: '#6b7280',
+                    fontStyle: 'italic'
+                }}>
+                    Oldest points are automatically removed as new fraud transactions arrive
+                </div>
+            )}
+        </div>
+    );
+};
+
 const App = () => {
+    const sseRef = useRef(null);
     const [transactions, setTransactions] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -377,8 +460,50 @@ const App = () => {
     }, []);
 
     useEffect(() => {
-        fetchTransactions();
-    }, [fetchTransactions]);
+  let initialized = false; // ✅ Prevent double init or empty reset
+
+  const sseUrl = import.meta.env.VITE_SSE_URL || 'http://localhost:8000/sse/transactions';
+
+  const handleSseMessage = (newTransaction) => {
+    if (!newTransaction || newTransaction.type !== 'new_transaction' || !newTransaction.data) return;
+
+    const normalizedTx = normalizeTransaction(newTransaction);
+
+    setTransactions(prev => {
+      // ✅ Avoid duplicates
+      const exists = prev.some(tx => tx.transaction_id === normalizedTx.transaction_id);
+      if (exists) return prev;
+      return [...prev, normalizedTx];
+    });
+  };
+
+  const initialize = async () => {
+    if (initialized) return;
+    initialized = true;
+
+    try {
+      const data = await getTransactions();
+
+      // ✅ Don’t overwrite if already populated
+      setTransactions(prev => (prev.length > 0 ? prev : data.map(normalizeTransaction)));
+
+      const sse = new TransactionSSE(sseUrl, handleSseMessage);
+      sse.connect();
+      sseRef.current = sse;
+    } catch (err) {
+      console.error("Failed to initialize app connection:", err);
+    }
+  };
+
+  initialize();
+
+  return () => {
+    if (sseRef.current) {
+      sseRef.current.disconnect();
+    }
+  };
+}, []);
+
 
     const ageFraudData = useMemo(() => {
         if (transactions.length === 0) return [];
@@ -394,7 +519,7 @@ const App = () => {
 
         transactions.forEach(tx => {
             const status = getTransactionStatus(tx);
-            if (status === 'FRAUDA') {
+            if (status === 'FRAUD') {
                 const age = calculateAge(tx.dob);
                 
                 for (const groupKey in ageGroups) {
@@ -414,7 +539,7 @@ const App = () => {
     }, [transactions]);
 
     const fraudAnalysis = useMemo(() => {
-        if (transactions.length === 0) {
+        if (!transactions || transactions.length === 0) {
             return { totalCount: 0, fraudCount: 0, fraudValue: 0, fraudRate: 0, alertCount: 0 };
         }
 
@@ -422,24 +547,28 @@ const App = () => {
         let fraudValue = 0;
         let alertCount = 0;
 
-        transactions.forEach(tx => {
+        for (const tx of transactions) {
             const status = getTransactionStatus(tx);
-            
             if (status === 'FRAUD') {
-                fraudCount++;
-                const amountValue = parseFloat(tx.amount);
-                fraudValue += isNaN(amountValue) ? 0 : amountValue;
+            fraudCount++;
+            fraudValue += parseFloat(tx.amount) || 0;
+            } else if (status === 'ALERT') {
+            alertCount++;
             }
-            if (status === 'ALERT') {
-                alertCount++;
-            }
-        });
+        }
 
         const totalCount = transactions.length;
-        const fraudRate = (totalCount > 0) ? (fraudCount / totalCount) * 100 : 0;
+        const fraudRate = totalCount > 0 ? (fraudCount / totalCount) * 100 : 0;
 
-        return { totalCount, fraudCount, fraudValue, fraudRate, alertCount };
-    }, [transactions]);
+        return { 
+            totalCount, 
+            fraudCount, 
+            fraudValue, 
+            fraudRate, 
+            alertCount 
+        };
+        }, [transactions]); // Make sure transactions is in the dependency array
+
 
     return (
         <div className="app">

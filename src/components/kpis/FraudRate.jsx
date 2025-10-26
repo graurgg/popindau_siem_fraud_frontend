@@ -2,14 +2,17 @@ import React from 'react';
 import KpiCard from './KpiCard';
 
 const FraudRate = ({ fraudRate }) => {
-    const isFraudulent = fraudRate > 0;
+    const rate = Number(fraudRate) || 0;
+    const isFraudulent = rate > 0;
+    
     return (
         <KpiCard 
             title="Rata de Fraudă" 
-            value={fraudRate.toFixed(2)} 
-            icon="%" 
+            value={rate} 
+            iconProp="%" 
             unit="%" 
             isFraud={isFraudulent}
+            formatFn={(val) => val.toFixed(2)}
         />
     );
 };
