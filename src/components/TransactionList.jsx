@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState , useEffect} from 'react';
 
 /**
  * Componentă pentru afișarea listei de tranzacții.
@@ -9,15 +9,29 @@ import React, { useState } from 'react';
  * @param {string | null} props.error - Mesajul de eroare.
  */
 const TransactionList = ({ transactions, loading, error }) => {
-    // Stare pentru a gestiona dacă lista este închisă (collapsed)
     const [isCollapsed, setIsCollapsed] = useState(true);
-    
-    // Numărul maxim de tranzacții recente de afișat
+    const [newTransactionsCount, setNewTransactionsCount] = useState(0);
     const MAX_DISPLAY_COUNT = 20;
-    
-    // Handler pentru închiderea/deschiderea listei
+
+    // Reset new transactions count when list is opened
+    useEffect(() => {
+        if (!isCollapsed) {
+            setNewTransactionsCount(0);
+        }
+    }, [isCollapsed]);
+
+    // Count new transactions when list is collapsed
+    useEffect(() => {
+        if (isCollapsed && transactions.length > 0) {
+            setNewTransactionsCount(prev => prev + 1);
+        }
+    }, [transactions, isCollapsed]);
+
     const handleToggle = () => {
         setIsCollapsed(!isCollapsed);
+        if (!isCollapsed) {
+            setNewTransactionsCount(0);
+        }
     }
 
     /**
@@ -105,6 +119,32 @@ const TransactionList = ({ transactions, loading, error }) => {
                 }}>
                     Tranzacții Recente ({recentTransactions.length})
                 </h2>
+                <span style={{ 
+                    transition: 'transform 0.2s',
+                    transform: isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)',
+                    marginRight: '10px',
+                    color: '#4299e1'
+                }}>
+                    ► 
+                </span>
+                
+                <h2 style={{ margin: 0, flexGrow: 1, fontSize: '1.5rem' }}>
+                    Tranzacții Recente ({transactions.length})
+                </h2>
+
+                {/* Show notification badge for new transactions */}
+                {newTransactionsCount > 0 && isCollapsed && (
+                    <span style={{
+                        backgroundColor: '#ef4444',
+                        color: 'white',
+                        borderRadius: '50%',
+                        padding: '2px 8px',
+                        fontSize: '0.8rem',
+                        marginLeft: '10px'
+                    }}>
+                        {newTransactionsCount}
+                    </span>
+                )}
             </div>
             
             {loading && <p style={{ color: '#6366f1' }}>Se încarcă tranzacțiile...</p>}

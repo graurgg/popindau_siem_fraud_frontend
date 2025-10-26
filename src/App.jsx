@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'; // Added useRef here
 import TransactionList from './components/TransactionList';
-import KpiOverview from './components/KpiOverview'; // Importăm componenta Overview
+import KpiOverview from './components/KpiOverview';
 import { getTransactions } from './services/api';
 import './App.css';
 
@@ -35,20 +35,19 @@ const calculateAge = (dobString) => {
         return 0;
     }
 };
-// ===================================================
 
 const App = () => {
     const [transactions, setTransactions] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
-    // --- Preluarea Datelor ---
+    // --- Preluarea Datelor cu Polling ---
     const fetchTransactions = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
             const data = await getTransactions();
-            setTransactions(prev => [...prev, ...data]); // pentru batch
+            setTransactions(data); // Replace the entire list
         } catch (err) {
             console.error("Eroare la preluarea tranzacțiilor:", err);
             setError("Nu s-au putut încărca tranzacțiile.");
@@ -58,7 +57,15 @@ const App = () => {
     }, []);
 
     useEffect(() => {
-        fetchTransactions();
+        fetchTransactions(); // Initial fetch
+        
+        // Set up polling every 5 seconds
+        const interval = setInterval(() => {
+            fetchTransactions();
+        }, 1000); // Poll every 5 seconds
+
+        // Cleanup interval on component unmount
+        return () => clearInterval(interval);
     }, [fetchTransactions]);
 
     // --- Logica de Analiză (KPI) ---
@@ -97,7 +104,6 @@ const App = () => {
 
         return { totalCount, fraudCount, fraudValue, fraudRate, alertCount, averageFraudAge };
     }, [transactions]);
-
 
     // --- Randarea ---
     return (
