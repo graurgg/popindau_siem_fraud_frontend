@@ -2,16 +2,20 @@ import React from 'react';
 import KpiCard from './KpiCard';
 
 const TotalFraudRate = ({ fraudValue }) => {
-    const isFraudulent = fraudValue > 0;
-    return (
-        <KpiCard 
-            title="Valoarea Totală Fraudă" 
-            value={`$${fraudValue.toFixed(2).toLocaleString()}`} 
-            icon="$" 
-            unit="" 
-            isFraud={isFraudulent}
-        />
-    );
+  const value = Number(fraudValue); // fallback sigur
+  const formatted = value.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+  return (
+    <KpiCard
+      title="Valoarea Totală Fraudă"
+      value={formatted}
+      unit="$"
+      iconProp="💰"
+    />
+  );
 };
 
 export default TotalFraudRate;

@@ -48,13 +48,23 @@ const getVisuals = (title) => {
  * @param {string|React.ReactNode} [props.iconProp] - Pictogramă trimisă din exterior ("❌")
  * @param {boolean} [props.isFraud] - True dacă ar trebui să fie de culoare roșie (fraudă)
  */
-const KpiCard = ({ title, value, unit = '', iconProp, isFraud, formatFn = (val) => val.toLocaleString() }) => {
+const KpiCard = ({
+  title,
+  value,
+  unit = '',
+  iconProp,
+  isFraud,
+  formatFn = (val) => {
+    if (val === undefined || val === null || isNaN(val)) return '0';
+    return Number(val).toLocaleString();
+  }
+}) => {
+
     // 1. Preluăm vizualizările implicite bazate pe titlu
     const { color, icon } = getVisuals(title);
 
     // 2. LOGICA DE SUPRASCRIERE
     
-    // Suprascriere Culoare: Forțăm roșu dacă isFraud este true, altfel folosim culoarea implicită
     const cardColor = color; 
     
     // Suprascriere Icon: Folosim iconProp ("❌") dacă este trimis, altfel icon-ul SVG implicit

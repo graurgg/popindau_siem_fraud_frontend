@@ -14,6 +14,29 @@ const getTransactionStatus = (tx) => {
     return 'LEGITIM';
 };
 
+// === Funcție Ajutătoare pentru Calculul Vârstei ===
+const calculateAge = (dobString) => {
+    if (!dobString) return 0;
+    try {
+        // Presupunem formatul YYYY-MM-DD
+        const birthDate = new Date(dobString);
+        const today = new Date();
+        
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const monthDifference = today.getMonth() - birthDate.getMonth();
+        
+        // Ajustăm vârsta dacă ziua de naștere nu a trecut încă în acest an
+        if (monthDifference < 0 || (monthDifference === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+        }
+        return age > 0 ? age : 0;
+    } catch (e) {
+        console.error("Eroare la parsarea DOB:", dobString, e);
+        return 0;
+    }
+};
+// ===================================================
+
 const App = () => {
     const [transactions, setTransactions] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -25,7 +48,7 @@ const App = () => {
         setError(null);
         try {
             const data = await getTransactions();
-            setTransactions(data);
+            setTransactions(prev => [...prev, ...data]); // pentru batch
         } catch (err) {
             console.error("Eroare la preluarea tranzacțiilor:", err);
             setError("Nu s-au putut încărca tranzacțiile.");
@@ -41,12 +64,13 @@ const App = () => {
     // --- Logica de Analiză (KPI) ---
     const fraudAnalysis = useMemo(() => {
         if (transactions.length === 0) {
-            return { totalCount: 0, fraudCount: 0, fraudValue: 0, fraudRate: 0, alertCount: 0 };
+            return { totalCount: 0, fraudCount: 0, fraudValue: 0, fraudRate: 0, alertCount: 0, averageFraudAge: 0};
         }
 
         let fraudCount = 0;
         let fraudValue = 0;
         let alertCount = 0;
+        let totalFraudAge = 0;
 
         transactions.forEach(tx => {
             const status = getTransactionStatus(tx);
@@ -54,6 +78,13 @@ const App = () => {
             if (status === 'FRAUDA') {
                 fraudCount++;
                 fraudValue += parseFloat(tx.amount || 0);
+
+                // === CALCUL VÂRSTĂ ===
+                if (tx.dob) {
+                    const age = calculateAge(tx.dob);
+                    totalFraudAge += age;
+                }
+                // =======================
             }
             if (status === 'ALERT') {
                 alertCount++;
@@ -62,8 +93,9 @@ const App = () => {
 
         const totalCount = transactions.length;
         const fraudRate = (totalCount > 0) ? (fraudCount / totalCount) * 100 : 0;
+        const averageFraudAge = fraudCount > 0 ? Math.round(totalFraudAge / fraudCount) : 0;
 
-        return { totalCount, fraudCount, fraudValue, fraudRate, alertCount };
+        return { totalCount, fraudCount, fraudValue, fraudRate, alertCount, averageFraudAge };
     }, [transactions]);
 
 

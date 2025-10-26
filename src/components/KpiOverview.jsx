@@ -2,6 +2,7 @@ import React from 'react';
 // Importăm toate componentele individuale pe care le-ai definit în structură
 import TotalFraudTransactions from './kpis/TotalFraudTransactions';
 import FraudRate from './kpis/FraudRate';
+import VulnerableAge from './kpis/VulnerableAge';
 import TotalFraudRate from './kpis/TotalFraudRate';
 import TotalTransactions from './kpis/TotalTransactions';
 
@@ -47,6 +48,7 @@ const KpiOverview = ({ analysis }) => {
             <FraudRate fraudRate={analysis.fraudRate} />
             <TotalFraudRate fraudValue={analysis.fraudValue} />
             <TotalFraudTransactions fraudCount={analysis.fraudCount} />
+            <VulnerableAge averageFraudAge={analysis.averageFraudAge} />
         </div>
     );
 };
