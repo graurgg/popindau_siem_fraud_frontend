@@ -5,7 +5,6 @@ import { getTransactions } from './services/api';
 import './App.css';
 
 // === Transaction Normalization Function ===
-// === Transaction Normalization Function ===
 const normalizeTransaction = (tx) => {
     console.log('Raw transaction:', tx); // Debug log
     
@@ -22,7 +21,7 @@ const normalizeTransaction = (tx) => {
     
     return {
         // ID fields - generate unique ID to prevent duplicates
-        transaction_id: generateUniqueId(),
+        transaction_id: transactionData.transaction_id || generateUniqueId(),
         trans_num: transactionData.trans_num,
         
         // Amount fields
@@ -31,42 +30,52 @@ const normalizeTransaction = (tx) => {
         // Status field (from your transaction example)
         status: transactionData.status,
         
+        // Fraud detection data
+        fraud_detection: transactionData.fraud_detection,
+        
         // Personal info for KPI calculations
-        dob: transactionData.dob,
-        first: transactionData.first,
-        last: transactionData.last,
-        gender: transactionData.gender,
+        dob: transactionData.dob || (transactionData.raw_data && transactionData.raw_data.dob),
+        first: transactionData.first || (transactionData.raw_data && transactionData.raw_data.first),
+        last: transactionData.last || (transactionData.raw_data && transactionData.raw_data.last),
+        gender: transactionData.gender || (transactionData.raw_data && transactionData.raw_data.gender),
         customer_name: transactionData.customer_name,
         
         // Transaction details
-        trans_date: transactionData.trans_date,
-        trans_time: transactionData.trans_time,
-        timestamp: transactionData.timestamp,
-        category: transactionData.category,
-        merchant: transactionData.merchant,
+        trans_date: transactionData.trans_date || (transactionData.raw_data && transactionData.raw_data.trans_date),
+        trans_time: transactionData.trans_time || (transactionData.raw_data && transactionData.raw_data.trans_time),
+        timestamp: transactionData.timestamp || transactionData.created_at,
+        category: transactionData.category || (transactionData.raw_data && transactionData.raw_data.category),
+        merchant: transactionData.merchant || (transactionData.raw_data && transactionData.raw_data.merchant),
         
         // Location data
-        city: transactionData.city,
-        state: transactionData.state,
-        city_pop: transactionData.city_pop,
+        city: transactionData.city || (transactionData.raw_data && transactionData.raw_data.city),
+        state: transactionData.state || (transactionData.raw_data && transactionData.raw_data.state),
+        city_pop: transactionData.city_pop || (transactionData.raw_data && transactionData.raw_data.city_pop),
         
         // Keep original transaction for reference
         _original: tx
     };
 };
 
-// Fraud detection logic based on your transaction data
+// Updated Fraud detection logic based on fraud_detection data
 const getTransactionStatus = (tx) => {
-    // Use the status from transaction data if available
-    if (tx.status) return tx.status;
+    // Use the fraud_detection data if available
+    if (tx.fraud_detection) {
+        const fraudProbability = tx.fraud_detection.fraud_probability || 0;
+        
+        if (fraudProbability >= 0.15) return 'FRAUD';
+        if (fraudProbability >= 0.1) return 'ALERT';
+        return 'LEGITIMATE';
+    }
     
+    // Fallback to old logic if no fraud_detection data
     const amount = parseFloat(tx.amount || 0);
     
     // Rule 1: High amount transactions
-    if (amount > 500) return 'FRAUDA';
+    if (amount > 500) return 'FRAUD';
     
     // Rule 2: Specific fraudulent merchants
-    if (tx.merchant && tx.merchant.toLowerCase().includes('fraud')) return 'FRAUDA';
+    if (tx.merchant && tx.merchant.toLowerCase().includes('fraud')) return 'FRAUD';
     
     // Rule 3: Suspicious categories
     const suspiciousCategories = ['gambling', 'cash_advance'];
@@ -75,7 +84,7 @@ const getTransactionStatus = (tx) => {
     // Rule 4: Shopping net with high amount
     if (tx.category === 'shopping_net' && amount > 300) return 'ALERT';
     
-    return 'LEGITIM';
+    return 'LEGITIMATE';
 };
 
 // === Age Calculation Function ===
@@ -197,7 +206,7 @@ const App = () => {
             const amount = parseFloat(tx.amount || 0);
             totalValue += amount;
             
-            if (status === 'FRAUDA') {
+            if (status === 'FRAUD') {
                 fraudCount++;
                 fraudValue += amount;
 
