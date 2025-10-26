@@ -38,18 +38,25 @@ const TransactionList = ({ transactions = [], loading, error }) => {
     return `${baseKey}-${timestamp}-${index}`;
   };
 
-  // === Fraud detection logic ===
+  // === Updated Fraud detection logic based on fraud_detection data ===
   const getTransactionStatus = (tx) => {
-    // Use the status from transaction data if available, otherwise calculate
-    if (tx.status) return tx.status;
+    // Use the fraud_detection data if available
+    if (tx.fraud_detection) {
+      const fraudProbability = tx.fraud_detection.fraud_probability || 0;
+      
+      if (fraudProbability >= 0.15) return 'FRAUD';
+      if (fraudProbability >= 0.1) return 'ALERT';
+      return 'LEGITIMATE';
+    }
     
+    // Fallback to old logic if no fraud_detection data
     const amount = parseFloat(tx.amount || 0);
     
     // Rule 1: High amount transactions
-    if (amount > 500) return 'FRAUDA';
+    if (amount > 500) return 'FRAUD';
     
     // Rule 2: Specific fraudulent merchants
-    if (tx.merchant && tx.merchant.toLowerCase().includes('fraud')) return 'FRAUDA';
+    if (tx.merchant && tx.merchant.toLowerCase().includes('fraud')) return 'FRAUD';
     
     // Rule 3: Suspicious categories
     const suspiciousCategories = ['gambling', 'cash_advance'];
@@ -58,19 +65,19 @@ const TransactionList = ({ transactions = [], loading, error }) => {
     // Rule 4: Shopping net with high amount
     if (tx.category === 'shopping_net' && amount > 300) return 'ALERT';
     
-    return 'LEGITIM';
+    return 'LEGITIMATE';
   };
 
   const getStatusColor = (status) => {
     const s = status?.toUpperCase();
-    if (s === 'FRAUDA') return '#ef4444';
+    if (s === 'FRAUD') return '#ef4444';
     if (s === 'ALERT') return '#f59e0b';
-    if (s === 'LEGITIM') return '#4CAF50';
+    if (s === 'LEGITIMATE') return '#4CAF50';
     return '#a0a0a0'; // Default color for unknown status
   };
 
   const formatTransactionId = (tx) => {
-    return tx.trans_num || tx.transaction_id || 'Unknown ID';
+    return tx.transaction_id || tx.trans_num || 'Unknown ID';
   };
 
   const formatCustomerName = (tx) => {
@@ -81,7 +88,10 @@ const TransactionList = ({ transactions = [], loading, error }) => {
 
   const formatDateTime = (tx) => {
     if (tx.timestamp) {
-      const date = new Date(tx.timestamp * 1000); // Convert to milliseconds
+      // Handle both string timestamps and numeric timestamps
+      const date = typeof tx.timestamp === 'string' 
+        ? new Date(tx.timestamp) 
+        : new Date(tx.timestamp * 1000);
       return date.toLocaleString('ro-RO', {
         year: 'numeric',
         month: '2-digit',
@@ -94,12 +104,22 @@ const TransactionList = ({ transactions = [], loading, error }) => {
     if (tx.trans_date && tx.trans_time) {
       return `${tx.trans_date} ${tx.trans_time.substring(0, 5)}`;
     }
+    if (tx.created_at) {
+      const date = new Date(tx.created_at);
+      return date.toLocaleString('ro-RO', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
     return 'Unknown Date';
   };
 
   const formatAmount = (tx) => {
     const amount = parseFloat(tx.amount || 0);
-    return amount.toFixed(2);
+    return `$${amount.toFixed(2)}`;
   };
 
   const formatCategory = (tx) => {
@@ -184,17 +204,15 @@ const TransactionList = ({ transactions = [], loading, error }) => {
               borderBottom: '1px solid #3b3d52'
             }}
           >
-            <span>Client / Tranzacție</span>
+            <span>Client / Merchant</span>
             <span>Data/Ora</span>
             <span style={{ textAlign: 'right' }}>Suma</span>
-            <span style={{ textAlign: 'center' }}>Categorie</span>
             <span style={{ textAlign: 'right' }}>Status</span>
           </li>
 
           {/* Transaction Rows */}
           {recentTransactions.map((tx, index) => {
             const status = getTransactionStatus(tx);
-            const amount = parseFloat(tx.amount || 0);
 
             return (
               <li
@@ -215,27 +233,32 @@ const TransactionList = ({ transactions = [], loading, error }) => {
                   (e.currentTarget.style.backgroundColor = 'transparent')
                 }
               >
-                {/* Customer and Transaction ID */}
+                {/* Customer, Merchant and Transaction ID */}
                 <div>
-                  <div style={{ fontWeight: '600', fontSize: '0.95em' }}>
+                  <div style={{ 
+                    fontWeight: 'bold', 
+                    fontSize: '0.95em',
+                    marginBottom: '4px'
+                  }}>
                     {formatCustomerName(tx)}
                   </div>
                   <div style={{ 
+                    fontWeight: 'bold', 
+                    fontSize: '0.9em',
+                    color: '#e0e0e0',
+                    marginBottom: '4px'
+                  }}>
+                    {formatMerchant(tx)}
+                  </div>
+                  <div style={{ 
                     fontFamily: 'monospace', 
-                    fontSize: '0.8em', 
+                    fontSize: '0.75em', 
                     color: '#a0a0a0',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap'
                   }}>
-                    {formatTransactionId(tx)}
-                  </div>
-                  <div style={{ 
-                    fontSize: '0.75em', 
-                    color: '#888',
-                    fontStyle: 'italic'
-                  }}>
-                    {formatMerchant(tx)}
+                    ID: {formatTransactionId(tx)}
                   </div>
                 </div>
 
@@ -245,20 +268,12 @@ const TransactionList = ({ transactions = [], loading, error }) => {
                 </span>
 
                 {/* Amount */}
-                <span style={{ textAlign: 'right', fontWeight: '600' }}>
-                  ${formatAmount(tx)}
-                </span>
-
-                {/* Category */}
                 <span style={{ 
-                  textAlign: 'center', 
-                  fontSize: '0.85em',
-                  backgroundColor: '#3b3d52',
-                  padding: '4px 8px',
-                  borderRadius: '12px',
-                  textTransform: 'capitalize'
+                  textAlign: 'right', 
+                  fontWeight: '600',
+                  fontSize: '1em'
                 }}>
-                  {formatCategory(tx)}
+                  {formatAmount(tx)}
                 </span>
 
                 {/* Status */}

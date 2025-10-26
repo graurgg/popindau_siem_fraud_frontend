@@ -5,13 +5,87 @@ import { getTransactions } from './services/api';
 import worldMap from './assets/world_map_2D.png';
 import './App.css';
 
-// Logica simplă de determinare a statusului (pentru a fi folosită în useMemo)
+// === Transaction Normalization Function ===
+const normalizeTransaction = (tx) => {
+    console.log('Raw transaction:', tx); // Debug log
+    
+    // Handle both direct transactions and transactions with data wrapper
+    const transactionData = tx.data || tx;
+    
+    // Generate unique ID using trans_num + timestamp + random suffix
+    const generateUniqueId = () => {
+        const baseId = transactionData.trans_num || 'unknown';
+        const timestamp = transactionData.timestamp || Date.now();
+        const randomSuffix = Math.random().toString(36).substr(2, 9);
+        return `${baseId}-${timestamp}-${randomSuffix}`;
+    };
+    
+    return {
+        // ID fields - generate unique ID to prevent duplicates
+        transaction_id: transactionData.transaction_id || generateUniqueId(),
+        trans_num: transactionData.trans_num,
+        
+        // Amount fields
+        amount: transactionData.amt || transactionData.amount || 0,
+        
+        // Status field (from your transaction example)
+        status: transactionData.status,
+        
+        // Fraud detection data
+        fraud_detection: transactionData.fraud_detection,
+        
+        // Personal info for KPI calculations
+        dob: transactionData.dob || (transactionData.raw_data && transactionData.raw_data.dob),
+        first: transactionData.first || (transactionData.raw_data && transactionData.raw_data.first),
+        last: transactionData.last || (transactionData.raw_data && transactionData.raw_data.last),
+        gender: transactionData.gender || (transactionData.raw_data && transactionData.raw_data.gender),
+        customer_name: transactionData.customer_name,
+        
+        // Transaction details
+        trans_date: transactionData.trans_date || (transactionData.raw_data && transactionData.raw_data.trans_date),
+        trans_time: transactionData.trans_time || (transactionData.raw_data && transactionData.raw_data.trans_time),
+        timestamp: transactionData.timestamp || transactionData.created_at,
+        category: transactionData.category || (transactionData.raw_data && transactionData.raw_data.category),
+        merchant: transactionData.merchant || (transactionData.raw_data && transactionData.raw_data.merchant),
+        
+        // Location data
+        city: transactionData.city || (transactionData.raw_data && transactionData.raw_data.city),
+        state: transactionData.state || (transactionData.raw_data && transactionData.raw_data.state),
+        city_pop: transactionData.city_pop || (transactionData.raw_data && transactionData.raw_data.city_pop),
+        
+        // Keep original transaction for reference
+        _original: tx
+    };
+};
+
+// Updated Fraud detection logic based on fraud_detection data
 const getTransactionStatus = (tx) => {
-    if (tx.status && tx.status.toUpperCase() === 'FRAUDA') return 'FRAUDA';
-    if (tx.fraud_flag !== undefined && tx.fraud_flag === 1) return 'FRAUDA';
-    if (parseFloat(tx.amount) > 100) return 'FRAUDA'; 
-    if (tx.status && tx.status.toUpperCase() === 'ALERT') return 'ALERT';
-    return 'LEGITIM';
+    // Use the fraud_detection data if available
+    if (tx.fraud_detection) {
+        const fraudProbability = tx.fraud_detection.fraud_probability || 0;
+        
+        if (fraudProbability >= 0.15) return 'FRAUD';
+        if (fraudProbability >= 0.1) return 'ALERT';
+        return 'LEGITIMATE';
+    }
+    
+    // Fallback to old logic if no fraud_detection data
+    const amount = parseFloat(tx.amount || 0);
+    
+    // Rule 1: High amount transactions
+    if (amount > 500) return 'FRAUD';
+    
+    // Rule 2: Specific fraudulent merchants
+    if (tx.merchant && tx.merchant.toLowerCase().includes('fraud')) return 'FRAUD';
+    
+    // Rule 3: Suspicious categories
+    const suspiciousCategories = ['gambling', 'cash_advance'];
+    if (tx.category && suspiciousCategories.includes(tx.category)) return 'ALERT';
+    
+    // Rule 4: Shopping net with high amount
+    if (tx.category === 'shopping_net' && amount > 300) return 'ALERT';
+    
+    return 'LEGITIMATE';
 };
 
 // === Funcție Ajutătoare pentru Calculul Vârstei ===
@@ -351,7 +425,7 @@ const App = () => {
         transactions.forEach(tx => {
             const status = getTransactionStatus(tx);
             
-            if (status === 'FRAUDA') {
+            if (status === 'FRAUD') {
                 fraudCount++;
                 const amountValue = parseFloat(tx.amount);
                 fraudValue += isNaN(amountValue) ? 0 : amountValue;
