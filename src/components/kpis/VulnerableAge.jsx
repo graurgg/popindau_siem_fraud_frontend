@@ -6,7 +6,7 @@ const VulnerableAge = ({ averageFraudAge }) => {
     return (
         <KpiCard 
             title="Vârsta vulnerabilă" 
-            value={averageFraudAge}
+            value={averageFraudAge.toLocaleString()}
             icon="🎉" 
             unit="" 
             isFraud={isFraudulent}
