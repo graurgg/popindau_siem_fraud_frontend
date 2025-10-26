@@ -69,9 +69,11 @@ const getTransactionStatus = (tx) => {
       tx.fraud_detection.fraud_probability ?? 
       tx.fraud_detection.probability ?? 
       0;
+    const is_fraud = tx.fraud_detection.is_fraud ?? false;
+    const confidence = tx.fraud_detection.confidence ?? 0;
 
-    if (fraudProbability >= 0.15) return 'FRAUD';
-    if (fraudProbability >= 0.1) return 'ALERT';
+    if (is_fraud || fraudProbability >= 0.95) return 'FRAUD';
+    if (fraudProbability >= 0.8) return 'ALERT';
     return 'LEGITIMATE';
   }
 
