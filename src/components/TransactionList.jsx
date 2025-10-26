@@ -1,214 +1,285 @@
-import React, { useState , useEffect} from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 /**
- * Componentă pentru afișarea listei de tranzacții.
- * Include ID-ul tranzacției, statusul de fraudă/legitim și funcționalitatea de a închide/deschide lista.
- * @param {object} props
- * @param {Array<object>} props.transactions - Lista de tranzacții. Presupusă a fi în ordine cronologică crescătoare (cea mai veche prima).
- * @param {boolean} props.loading - Starea de încărcare.
- * @param {string | null} props.error - Mesajul de eroare.
+ * Component for displaying transaction list with fraud detection status
  */
-const TransactionList = ({ transactions, loading, error }) => {
-    const [isCollapsed, setIsCollapsed] = useState(true);
-    const [newTransactionsCount, setNewTransactionsCount] = useState(0);
-    const MAX_DISPLAY_COUNT = 20;
+const TransactionList = ({ transactions = [], loading, error }) => {
+  const [isCollapsed, setIsCollapsed] = useState(true);
+  const [newTransactionsCount, setNewTransactionsCount] = useState(0);
+  const prevTxCountRef = useRef(0);
+  const MAX_DISPLAY_COUNT = 20;
 
-    // Reset new transactions count when list is opened
-    useEffect(() => {
-        if (!isCollapsed) {
-            setNewTransactionsCount(0);
-        }
-    }, [isCollapsed]);
-
-    // Count new transactions when list is collapsed
-    useEffect(() => {
-        if (isCollapsed && transactions.length > 0) {
-            setNewTransactionsCount(prev => prev + 1);
-        }
-    }, [transactions, isCollapsed]);
-
-    const handleToggle = () => {
-        setIsCollapsed(!isCollapsed);
-        if (!isCollapsed) {
-            setNewTransactionsCount(0);
-        }
+  // === Notification count handling ===
+  useEffect(() => {
+    if (!isCollapsed) {
+      setNewTransactionsCount(0);
+      prevTxCountRef.current = transactions.length;
     }
+  }, [isCollapsed, transactions.length]);
 
-    /**
-     * Determină statusul tranzacției folosind datele disponibile sau regula de bază.
-     * @param {object} tx - Obiectul tranzacției.
-     * @returns {string} Statusul tranzacției (ex: 'FRAUDA', 'LEGITIM', 'ALERT').
-     */
-    const getTransactionStatus = (tx) => {
-        // 1. Verifică câmpul 'status' (prioritate maximă)
-        if (tx.status) {
-            return tx.status.toUpperCase();
-        }
-        
-        // 2. Verifică câmpul 'fraud_flag' (dacă e 1 sau 0)
-        if (tx.fraud_flag !== undefined) {
-            return tx.fraud_flag === 1 ? 'FRAUDA' : 'LEGITIM';
-        }
-        
-        // 3. Fallback: Folosește regula ta de bază (suma > $100)
-        return (parseFloat(tx.amount) > 100) ? 'FRAUDA' : 'LEGITIM';
+  useEffect(() => {
+    const currentCount = transactions.length;
+    if (isCollapsed && prevTxCountRef.current > 0) {
+      const newItems = currentCount - prevTxCountRef.current;
+      if (newItems > 0) {
+        setNewTransactionsCount(prev => prev + newItems);
+      }
     }
+    prevTxCountRef.current = currentCount;
+  }, [transactions, isCollapsed]);
 
-    /**
-     * Returnează codul de culoare CSS în funcție de status.
-     * @param {string} status - Statusul tranzacției.
-     * @returns {string} Codul HEX al culorii.
-     */
-    const getStatusColor = (status) => {
-        const s = status.toUpperCase();
-        if (s === 'FRAUDULENT' || s === 'FRAUDA') {
-            return '#ef4444'; // Roșu aprins pentru Fraudă
-        }
-        if (s === 'ALERT') {
-            return '#f59e0b'; // Galben/Portocaliu pentru Alertă/Revizuire
-        }
-        return '#4CAF50'; // Verde pentru Legitim
-    };
+  const handleToggle = () => setIsCollapsed(!isCollapsed);
+
+  // === Generate unique key for each transaction ===
+  const generateTransactionKey = (tx, index) => {
+    // Use trans_num + timestamp for uniqueness, fallback to index
+    const baseKey = tx.trans_num || 'unknown';
+    const timestamp = tx.timestamp || tx._original?.timestamp || index;
+    return `${baseKey}-${timestamp}-${index}`;
+  };
+
+  // === Fraud detection logic ===
+  const getTransactionStatus = (tx) => {
+    // Use the status from transaction data if available, otherwise calculate
+    if (tx.status) return tx.status;
     
-    // 1. Facem o copie a array-ului și îl inversăm pentru a avea cele mai recente tranzacții primele.
-    // (Presupunem că tranzacțiile vin în ordine cronologică crescătoare).
-    const reversedTransactions = [...transactions].reverse();
+    const amount = parseFloat(tx.amount || 0);
+    
+    // Rule 1: High amount transactions
+    if (amount > 500) return 'FRAUDA';
+    
+    // Rule 2: Specific fraudulent merchants
+    if (tx.merchant && tx.merchant.toLowerCase().includes('fraud')) return 'FRAUDA';
+    
+    // Rule 3: Suspicious categories
+    const suspiciousCategories = ['gambling', 'cash_advance'];
+    if (tx.category && suspiciousCategories.includes(tx.category)) return 'ALERT';
+    
+    // Rule 4: Shopping net with high amount
+    if (tx.category === 'shopping_net' && amount > 300) return 'ALERT';
+    
+    return 'LEGITIM';
+  };
 
-    // 2. Limităm lista la ultimele MAX_DISPLAY_COUNT (cele mai recente) pentru afișare.
-    const recentTransactions = reversedTransactions.slice(0, MAX_DISPLAY_COUNT);
+  const getStatusColor = (status) => {
+    const s = status?.toUpperCase();
+    if (s === 'FRAUDA') return '#ef4444';
+    if (s === 'ALERT') return '#f59e0b';
+    if (s === 'LEGITIM') return '#4CAF50';
+    return '#a0a0a0'; // Default color for unknown status
+  };
 
-    return (
-        <div style={{ padding: '15px', backgroundColor: '#202230', borderRadius: '8px' }}>
-            {/* Header-ul interactiv */}
-            <div
-                onClick={handleToggle}
-                style={{ 
-                    color: '#e0e0e0', 
-                    marginBottom: '15px', 
-                    // Neutralizare CSS pentru a elimina săgeata albastră (marker de listă moștenit)
-                    listStyleType: 'none', 
-                    paddingLeft: '0px', 
-                    margin: '0',
-                    
-                    fontSize: '1.5rem', 
-                    borderBottom: '2px solid #3b3d52', 
-                    paddingBottom: '10px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between'
+  const formatTransactionId = (tx) => {
+    return tx.trans_num || tx.transaction_id || 'Unknown ID';
+  };
+
+  const formatCustomerName = (tx) => {
+    if (tx.first && tx.last) return `${tx.first} ${tx.last}`;
+    if (tx.customer_name) return tx.customer_name;
+    return 'Unknown Customer';
+  };
+
+  const formatDateTime = (tx) => {
+    if (tx.timestamp) {
+      const date = new Date(tx.timestamp * 1000); // Convert to milliseconds
+      return date.toLocaleString('ro-RO', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+    }
+    if (tx.trans_date && tx.trans_time) {
+      return `${tx.trans_date} ${tx.trans_time.substring(0, 5)}`;
+    }
+    return 'Unknown Date';
+  };
+
+  const formatAmount = (tx) => {
+    const amount = parseFloat(tx.amount || 0);
+    return amount.toFixed(2);
+  };
+
+  const formatCategory = (tx) => {
+    return tx.category || 'Unknown';
+  };
+
+  const formatMerchant = (tx) => {
+    return tx.merchant || 'Unknown Merchant';
+  };
+
+  const recentTransactions = transactions
+    .slice(-MAX_DISPLAY_COUNT)
+    .reverse();
+
+  if (loading) return <p>Loading transactions...</p>;
+  if (error) return <p className="error">{error}</p>;
+
+  return (
+    <div style={{ padding: '15px', backgroundColor: '#202230', borderRadius: '8px' }}>
+      {/* Header */}
+      <div
+        onClick={handleToggle}
+        style={{
+          color: '#e0e0e0',
+          marginBottom: '15px',
+          fontSize: '1.5rem',
+          borderBottom: '2px solid #3b3d52',
+          paddingBottom: '10px',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between'
+        }}
+      >
+        <span
+          style={{
+            transition: 'transform 0.2s',
+            transform: isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)',
+            marginRight: '10px',
+            color: '#4299e1'
+          }}
+        >
+          ►
+        </span>
+
+        <h2 style={{ margin: 0, flexGrow: 1, fontSize: '1.5rem' }}>
+          Tranzacții Recente ({transactions.length})
+        </h2>
+
+        {newTransactionsCount > 0 && isCollapsed && (
+          <span
+            style={{
+              backgroundColor: '#ef4444',
+              color: 'white',
+              borderRadius: '50%',
+              padding: '2px 8px',
+              fontSize: '0.8rem',
+              marginLeft: '10px'
+            }}
+          >
+            {newTransactionsCount}
+          </span>
+        )}
+      </div>
+
+      {!isCollapsed && transactions.length === 0 && (
+        <p style={{ color: '#a0a0a0', paddingTop: '10px' }}>
+          Nu există tranzacții de afișat.
+        </p>
+      )}
+
+      {!isCollapsed && recentTransactions.length > 0 && (
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+          {/* Table Header */}
+          <li
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '2fr 1.5fr 1fr 1fr 1fr',
+              fontWeight: 'bold',
+              color: '#a0a0a0',
+              padding: '10px 0',
+              borderBottom: '1px solid #3b3d52'
+            }}
+          >
+            <span>Client / Tranzacție</span>
+            <span>Data/Ora</span>
+            <span style={{ textAlign: 'right' }}>Suma</span>
+            <span style={{ textAlign: 'center' }}>Categorie</span>
+            <span style={{ textAlign: 'right' }}>Status</span>
+          </li>
+
+          {/* Transaction Rows */}
+          {recentTransactions.map((tx, index) => {
+            const status = getTransactionStatus(tx);
+            const amount = parseFloat(tx.amount || 0);
+
+            return (
+              <li
+                key={generateTransactionKey(tx, index)}
+                style={{
+                  padding: '12px 0',
+                  borderBottom: '1px dashed #3b3d52',
+                  display: 'grid',
+                  gridTemplateColumns: '2fr 1.5fr 1fr 1fr 1fr',
+                  alignItems: 'center',
+                  color: '#ffffff',
+                  transition: 'background-color 0.2s'
                 }}
-            >
-                {/* Săgeata (pictograma) care se rotește */}
-                <span style={{ 
-                    transition: 'transform 0.2s',
-                    transform: isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)', // Rotație de 90 de grade când e deschis
-                    marginRight: '10px',
-                    color: '#4299e1' // Culoarea accent blue din CSS-ul tău
-                }}>
-                    ► 
-                </span>
-                
-                {/* Titlul */}
-                <h2 style={{ 
-                    margin: 0, 
-                    flexGrow: 1, 
-                    fontSize: '1.5rem',
-                    // Asigurăm că nu este stilizat ca un element de listă
-                    listStyleType: 'none', 
-                }}>
-                    Tranzacții Recente ({recentTransactions.length})
-                </h2>
-                <span style={{ 
-                    transition: 'transform 0.2s',
-                    transform: isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)',
-                    marginRight: '10px',
-                    color: '#4299e1'
-                }}>
-                    ► 
-                </span>
-                
-                <h2 style={{ margin: 0, flexGrow: 1, fontSize: '1.5rem' }}>
-                    Tranzacții Recente ({transactions.length})
-                </h2>
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.backgroundColor = '#252735')
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.backgroundColor = 'transparent')
+                }
+              >
+                {/* Customer and Transaction ID */}
+                <div>
+                  <div style={{ fontWeight: '600', fontSize: '0.95em' }}>
+                    {formatCustomerName(tx)}
+                  </div>
+                  <div style={{ 
+                    fontFamily: 'monospace', 
+                    fontSize: '0.8em', 
+                    color: '#a0a0a0',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                  }}>
+                    {formatTransactionId(tx)}
+                  </div>
+                  <div style={{ 
+                    fontSize: '0.75em', 
+                    color: '#888',
+                    fontStyle: 'italic'
+                  }}>
+                    {formatMerchant(tx)}
+                  </div>
+                </div>
 
-                {/* Show notification badge for new transactions */}
-                {newTransactionsCount > 0 && isCollapsed && (
-                    <span style={{
-                        backgroundColor: '#ef4444',
-                        color: 'white',
-                        borderRadius: '50%',
-                        padding: '2px 8px',
-                        fontSize: '0.8rem',
-                        marginLeft: '10px'
-                    }}>
-                        {newTransactionsCount}
-                    </span>
-                )}
-            </div>
-            
-            {loading && <p style={{ color: '#6366f1' }}>Se încarcă tranzacțiile...</p>}
-            
-            {error && <p style={{ color: '#ef4444' }}>Eroare la încărcarea datelor: {error}</p>}
+                {/* Date/Time */}
+                <span style={{ fontSize: '0.9em', color: '#c0c0c0' }}>
+                  {formatDateTime(tx)}
+                </span>
 
-            {/* Conținutul listei, afișat doar dacă NU este închis */}
-            {!isCollapsed && !loading && !error && (
-                <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                    {/* Antetul Coloanelor */}
-                    <li style={{ 
-                        display: 'grid', 
-                        gridTemplateColumns: '3fr 1fr 1fr', 
-                        fontWeight: 'bold', 
-                        color: '#a0a0a0',
-                        padding: '10px 0'
-                    }}>
-                        <span>ID Tranzacție</span>
-                        <span style={{textAlign: 'right'}}>Suma</span>
-                        <span style={{textAlign: 'right'}}>Status</span>
-                    </li>
-                    {/* Lista de Tranzacții */}
-                    {recentTransactions.length === 0 ? (
-                        <p style={{ color: '#a0a0a0', paddingTop: '10px' }}>Nu există tranzacții de afișat.</p>
-                    ) : (
-                        recentTransactions.map((tx, index) => {
-                            const status = getTransactionStatus(tx);
-                            return (
-                                <li 
-                                    key={tx.trans_num || index} 
-                                    style={{ 
-                                        padding: '12px 0', 
-                                        borderBottom: '1px dashed #3b3d52',
-                                        display: 'grid',
-                                        gridTemplateColumns: '3fr 1fr 1fr',
-                                        alignItems: 'center',
-                                        color: '#ffffff',
-                                        transition: 'background-color 0.2s',
-                                    }}
-                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#252735'}
-                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-                                >
-                                    <span style={{ fontFamily: 'monospace', fontSize: '0.9em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        {tx.trans_num || `Tranzacție #${index + 1}`}
-                                    </span>
-                                    <span style={{textAlign: 'right'}}>
-                                        ${parseFloat(tx.amount).toFixed(2)}
-                                    </span>
-                                    <span style={{ 
-                                        textAlign: 'right',
-                                        color: getStatusColor(status),
-                                        fontWeight: '600',
-                                        fontSize: '0.9em'
-                                    }}>
-                                        {status}
-                                    </span>
-                                </li>
-                            );
-                        })
-                    )}
-                </ul>
-            )}
-        </div>
-    );
+                {/* Amount */}
+                <span style={{ textAlign: 'right', fontWeight: '600' }}>
+                  ${formatAmount(tx)}
+                </span>
+
+                {/* Category */}
+                <span style={{ 
+                  textAlign: 'center', 
+                  fontSize: '0.85em',
+                  backgroundColor: '#3b3d52',
+                  padding: '4px 8px',
+                  borderRadius: '12px',
+                  textTransform: 'capitalize'
+                }}>
+                  {formatCategory(tx)}
+                </span>
+
+                {/* Status */}
+                <span
+                  style={{
+                    textAlign: 'right',
+                    color: getStatusColor(status),
+                    fontWeight: '700',
+                    fontSize: '0.9em',
+                    textTransform: 'uppercase'
+                  }}
+                >
+                  {status}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
 };
 
 export default TransactionList;
